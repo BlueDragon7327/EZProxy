@@ -19,14 +19,39 @@ app.get('/proxy', async (req, res) => {
     try {
         const browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'], // Necessary for some environments
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
         const page = await browser.newPage();
 
-        // Spoof headers to bypass restrictions
-        await page.setExtraHTTPHeaders({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-            'Referer': 'https://poki.com',
+        // Intercept and modify requests
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+            if (request.isNavigationRequest() && request.url().includes('poki.com')) {
+                request.continue({
+                    headers: {
+                        ...request.headers(),
+                        referer: 'https://poki.com',
+                    },
+                });
+            } else {
+                request.continue();
+            }
+        });
+
+        // Spoof `window.location` and other properties
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(window, 'location', {
+                get: () => ({
+                    href: 'https://poki.com',
+                    origin: 'https://poki.com',
+                    protocol: 'https:',
+                    host: 'poki.com',
+                    hostname: 'poki.com',
+                    pathname: '/',
+                    search: '',
+                    hash: '',
+                }),
+            });
         });
 
         // Navigate to the target URL
@@ -35,8 +60,8 @@ app.get('/proxy', async (req, res) => {
         // Get the rendered HTML
         let content = await page.content();
 
-        // Replace Poki references in content
-        content = content.replace(/https:\/\/poki\.com/g, req.protocol + '://' + req.get('host'));
+        // Replace any instances of 'poki.com' with the proxy URL in content
+        content = content.replace(/https:\/\/poki\.com/g, req.protocol + '://' + req.get('host') + '/proxy?url=https://poki.com');
 
         await browser.close();
 
