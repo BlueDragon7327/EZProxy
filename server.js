@@ -23,13 +23,19 @@ app.get('/proxy', async (req, res) => {
         });
         const page = await browser.newPage();
 
+        // Spoof headers to bypass restrictions
+        await page.setExtraHTTPHeaders({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+            'Referer': 'https://poki.com',
+        });
+
         // Navigate to the target URL
         await page.goto(targetUrl, { waitUntil: 'networkidle2' });
 
         // Get the rendered HTML
         let content = await page.content();
 
-        // Replace any occurrence of the real URL with the spoofed URL
+        // Replace Poki references in content
         content = content.replace(/https:\/\/poki\.com/g, req.protocol + '://' + req.get('host'));
 
         await browser.close();
