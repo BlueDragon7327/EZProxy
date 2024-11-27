@@ -9,7 +9,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Puppeteer Proxy with header spoofing
+// Puppeteer Proxy
 app.get('/proxy', async (req, res) => {
     const targetUrl = req.query.url;
     if (!targetUrl) {
@@ -23,23 +23,14 @@ app.get('/proxy', async (req, res) => {
         });
         const page = await browser.newPage();
 
-        // Set spoofed headers to look like the request is coming from Poki
-        await page.setRequestInterception(true);
-        page.on('request', (request) => {
-            request.continue({
-                headers: {
-                    ...request.headers(),
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Referer': 'https://poki.com/',
-                },
-            });
-        });
-
         // Navigate to the target URL
         await page.goto(targetUrl, { waitUntil: 'networkidle2' });
 
         // Get the rendered HTML
-        const content = await page.content();
+        let content = await page.content();
+
+        // Replace any occurrence of the real URL with the spoofed URL
+        content = content.replace(/https:\/\/poki\.com/g, req.protocol + '://' + req.get('host'));
 
         await browser.close();
 
